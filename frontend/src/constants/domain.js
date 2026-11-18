@@ -63,6 +63,16 @@ export const domain = {
   },
   "method_label": "会话内一阶转移计数、条件概率与相对全局基率提升",
   "result_headline": "一条接续关系，三个明确的分母。",
+  "privacy": {
+    "total_quota": 6,
+    "chapters": ["序章", "材料", "工艺", "案例", "附录"],
+    "default_parameters": {
+      "epsilon": 0.5,
+      "min_count": 3,
+      "top_n": 20
+    },
+    "epsilon_range": [0.05, 5]
+  },
   "column_labels": {
     "reference": "样本编号",
     "actual": "实际类型",

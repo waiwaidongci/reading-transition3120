@@ -6,11 +6,14 @@ from src.models.user import User
 from src.models.source import Source
 from src.models.record import Record
 from src.models.run import Run
+from src.models.privacy import PrivacyStudy,PrivacyLedger,PrivacyAccount
 from src.models import note,audit
 from src.utils.security import hash_password
 from src.utils.serialization import now
 from src.services.runs import queue
-from src.services.domain_validation import validate_record
+from src.services.domain_validation import validate_record,validate_privacy_parameters
+from src.services.privacy import get_account,QUEUE_KEY
+from src.services.privacy_algorithm import cache_key_for
 
 def seed_values(kind,index,batch,rng):
     if kind=='gaussian':
@@ -33,7 +36,7 @@ def seed_values(kind,index,batch,rng):
 def counts(db):
     return {cls.__tablename__:db.scalar(select(func.count()).select_from(cls)) for cls in (User,Source,Record,Run)}
 def seed():
-    Base.metadata.create_all(engine);rng=random.Random(42);queued=[]
+    Base.metadata.create_all(engine);rng=random.Random(42);queued=[];privacy_queued=[]
     with Session() as db:
         for role in ('admin','analyst','viewer'):
             email=role+'@'+CONFIG['slug']+'.demo'
@@ -52,8 +55,17 @@ def seed():
             if batch==0 and not db.scalar(select(Run.id).where(Run.name=='首轮种子研究')):
                 records=[{'id':r.id,'source_id':r.source_id,'reference':r.reference,'values':r.values} for r in db.scalars(select(Record).where(Record.source_id==source.id).order_by(Record.id))]
                 run=Run(source_id=source.id,name='首轮种子研究',state='queued',parameters=CONFIG['default_parameters'],snapshot={'source':{'id':source.id,'name':source.name,'filename':source.filename},'records':records},created_at=now());db.add(run);db.flush();queued.append(run.id)
+            if batch==0 and not db.scalar(select(PrivacyStudy.id).where(PrivacyStudy.name=='首轮隐私种子研究')):
+                get_account(db)
+                records=[{'id':r.id,'source_id':r.source_id,'reference':r.reference,'values':r.values} for r in db.scalars(select(Record).where(Record.source_id==source.id).order_by(Record.id))]
+                params=validate_privacy_parameters({})
+                study=PrivacyStudy(source_id=source.id,name='首轮隐私种子研究',state='queued',parameters=params,snapshot={'source':{'id':source.id,'name':source.name,'filename':source.filename},'records':records},cache_key=cache_key_for(records,params),created_at=now());db.add(study);db.flush()
+                t=now();db.add(PrivacyLedger(study_id=study.id,cache_key=study.cache_key,amount=params['epsilon'],state='held',created_at=t,updated_at=t));privacy_queued.append(study.id)
         db.commit();print(json.dumps(counts(db),ensure_ascii=False))
     for id in queued:
         try:queue.rpush('analysis:queue',id)
+        except Exception:logging.exception('seed queue unavailable')
+    for id in privacy_queued:
+        try:queue.rpush(QUEUE_KEY,id)
         except Exception:logging.exception('seed queue unavailable')
 if __name__=='__main__':seed()

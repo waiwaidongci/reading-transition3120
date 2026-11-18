@@ -4,7 +4,8 @@ from ..config.settings import CONFIG
 class Note(Base):
     __tablename__=CONFIG['note_table']
     id=Column(Integer,primary_key=True)
-    run_id=Column(Integer,ForeignKey(CONFIG['run_table']+'.id'),nullable=False)
+    run_id=Column(Integer,ForeignKey(CONFIG['run_table']+'.id'),nullable=True)
+    privacy_id=Column(Integer,ForeignKey('privacy_studies.id'),nullable=True)
     title=Column(String(160),nullable=False)
     body=Column(Text,nullable=False)
     state=Column(String(20),default='draft')

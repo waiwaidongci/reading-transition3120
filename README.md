@@ -8,12 +8,13 @@
 
 ## 业务模块
 
-1. 业务总览：批次、样本、任务与批准交付账册。
+1. 业务总览：批次、样本、任务、批准交付账册与隐私额度。
 2. 阅读文集：创建/修改来源说明、查看样本、用真实业务字段追加记录；列表分页。
 3. 分析配置：冻结来源、参数和全部样本，进入Redis队列。
 4. 完整结果：真实算法摘要、专属诊断、全部CSV导出和可恢复失败态。
-5. 编辑衔接建议：分析师草案→负责人批准→阅读者下载批准快照。
-6. 审计：登录、来源修改、任务worker完成、业务说明批准等事件。
+5. 隐私研究：共享 ε 额度账本、预登记章节全集扰动、占额/扣实/退回与取消。
+6. 编辑衔接建议：分析师草案→负责人批准→阅读者下载批准快照。
+7. 审计：登录、来源修改、任务worker完成、隐私额度占退、业务说明批准等事件。
 
 ## 快速启动
 
@@ -53,9 +54,22 @@ JWT有效期8小时；PBKDF2盐化哈希保存密码；角色每请求从数据�
 
 ## 实体与字段
 
-ReadingCollection / ReadingSession / TransitionRun / EditorialPlan 是核心实体；另有User和Audit。数据库实际表：`reading_collections` → `reading_sessions` → `transition_runs` → `editorial_plans`。样本以固定字段JSON保存，后端按以下字段严格验证，不接受未知字段替代必填值：匿名会话编号（`session`）、章节路径（用 > 分隔）（`path`）。
+ReadingCollection / ReadingSession / TransitionRun / EditorialPlan 是核心实体；隐私研究另有 PrivacyStudy / PrivacyLedger / PrivacyAccount；另有User和Audit。数据库实际表：`reading_collections` → `reading_sessions` → `transition_runs` → `editorial_plans`，以及 `privacy_studies` → `privacy_ledger`、`privacy_account`。样本以固定字段JSON保存，后端按以下字段严格验证，不接受未知字段替代必填值：匿名会话编号（`session`）、章节路径（用 > 分隔）（`path`）。
 
 实体贯穿 `backend/src/models`、`schemas`、`services`、`controllers`、`routes`，以及 `frontend/src/api/research.js`、`stores/research.js` 和 `pages`。`Source.key` 与 `(Record.source_id, reference)` 为自然键；来源改名不会修改已冻结任务输入。业务说明在创建时保存结果快照，批准后从该快照导出。
+
+## 隐私研究与共享额度
+
+罕见接续和反复查询会泄露阅读路径，因此另设**隐私研究**：对共享文集的扰动计数研究，占用全组共享的 ε 额度。
+
+- 每个匿名会话最多贡献一条接续（取路径首条相邻对，未登记章节不计）。
+- 按预登记章节全集（序章/材料/工艺/案例/附录）的每个有序章节对计数，逐格加拉普拉斯噪声（刻度 b=1/ε，含零计数格），截断为非负。
+- 全部条件概率、目标基率、提升度与阈值筛选只由非负噪声计数推导；噪声由 `PRIVACY_SECRET` 与扰动指纹派生，同一冻结输入+参数复用同份扰动。
+- 额度账本：受理先占额（held），结果首次可见才扣实（confirmed），未公开失败或取消退回（refunded），已公开永不退；余额不足拒绝（409）。占额、结果保存与扣实在同一事务，中断后启动恢复重排队并对账，重试不重复扣额；取消与旧计算晚到时结果被丢弃，不泄露未付结果。
+- 同一冻结输入+参数自动复用已有研究（不重复扣额）；改参数即新扰动身份，累计扣额。
+- 隐私研究的页面、建议与CSV导出都只使用同一份保护结果；常规旧研究可读，但说明标注为“常规口径”，不能冒充隐私结果。
+
+隐私参数：`epsilon`（0.05–5，默认0.5）、`min_count`（噪声后阈值，默认3）、`top_n`（默认20）。共享总额度 ε=6，页面与 `/privacy/account` 标明噪声规则与额度。
 
 ## 算法与口径
 
@@ -72,7 +86,7 @@ ReadingCollection / ReadingSession / TransitionRun / EditorialPlan 是核心实�
 
 ## 演示数据与一天剧本
 
-固定seed=42，3个来源 ` SY-202611-01/02/03`，每来源240条，共720条业务记录；三个账号和首轮种子任务。自然键检查后仅插入缺失数据，连跑seed不重复、不覆盖用户修改。`SEED_DEMO=true` 时启动自动执行；失败记录日志但不阻塞服务。首轮任务同样由独立worker真实计算。
+固定seed=42，3个来源 ` SY-202611-01/02/03`，每来源240条，共720条业务记录；三个账号和首轮种子任务，另有一轮占额 ε=0.5 的“首轮隐私种子研究”。自然键检查后仅插入缺失数据，连跑seed不重复、不覆盖用户修改。`SEED_DEMO=true` 时启动自动执行；失败记录日志但不阻塞服务。首轮任务同样由独立worker真实计算。
 
 1. 09:00 负责人查看三份来源和720条样本。
 2. 09:10 分析师选择 `SY-202611-01 秋季常规组`，核对 `reading-transition-202611-01.csv`。
@@ -100,9 +114,10 @@ backend/migrations/001_initial.sql
 | FRONTEND_PORT / BACKEND_PORT / DB_PORT | `18247 / 19247 / 17747` |
 | SEED_DEMO | `true` |
 | JWT_SECRET | `.env.example`演示值，部署前修改 |
+| PRIVACY_SECRET | 隐私扰动派生密钥，缺省回退JWT_SECRET，部署前独立修改 |
 | DATABASE_URL / REDIS_URL | Compose内部连接，定义在compose的env锚点 |
 | ARTIFACT_DIR | `/artifacts`，后端worker共享 |
 
-共享枚举：`backend/src/constants/enums.py` 与 `frontend/src/constants/enums.js` 都定义 admin/analyst/viewer、queued/running/completed/failed、draft/approved。后端service检查对应字符串；README为全量值说明。共享前端组件table/status/chart/business跨总览、结果、配置与复核复用；actions hook和format utils负责交互/格式。后端errors与rate_limit是两个中间件。
+共享枚举：`backend/src/constants/enums.py` 与 `frontend/src/constants/enums.js` 都定义 admin/analyst/viewer、queued/running/completed/failed、draft/approved；隐私研究另有 cancelled 状态与 held/confirmed/refunded 账本状态。后端service检查对应字符串；README为全量值说明。共享前端组件table/status/chart/business跨总览、结果、配置、隐私与复核复用；actions hook和format utils负责交互/格式。后端errors与rate_limit是两个中间件。
 
 测试及截图在批根 `test-artifacts/gb-0043/`，不混入源码。独立算法oracle、HTTP完整流程和真实Playwright浏览器流程见该目录 `TESTING.md`。License：MIT。

@@ -1,6 +1,7 @@
 from pydantic import BaseModel,Field
 class NoteInput(BaseModel):
-    run_id:int
+    run_id:int|None=None
+    privacy_id:int|None=None
     title:str=Field(min_length=2,max_length=160)
     body:str=Field(min_length=5,max_length=4000)
 class LoginInput(BaseModel):

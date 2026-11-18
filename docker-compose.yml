@@ -33,6 +33,7 @@ services:
       DATABASE_URL: mysql+pymysql://research:research_demo@db:3306/research?charset=utf8mb4
       REDIS_URL: redis://redis:6379/0
       JWT_SECRET: ${JWT_SECRET:-reading-transition-demo-secret-change-before-deployment}
+      PRIVACY_SECRET: ${PRIVACY_SECRET:-}
       SEED_DEMO: ${SEED_DEMO:-true}
       ARTIFACT_DIR: /artifacts
       OPENBLAS_NUM_THREADS: 1

@@ -2,6 +2,7 @@ import csv,io
 from fastapi import HTTPException
 from fastapi.responses import Response
 from ..models.note import Note
+from ..models.privacy import PrivacyStudy
 from .runs import get_run
 def csv_response(result,filename):
     buf=io.StringIO();fields=result['columns'];w=csv.DictWriter(buf,fieldnames=fields);w.writeheader()
@@ -16,3 +17,8 @@ def note_csv(db,id):
     if not n:raise HTTPException(404,'未找到说明')
     if n.state!='approved':raise HTTPException(403,'仅批准后的业务说明可导出')
     return csv_response(n.frozen_result,'approved-'+str(id)+'.csv')
+def privacy_csv(db,id):
+    r=db.get(PrivacyStudy,id)
+    if not r:raise HTTPException(404,'未找到隐私研究')
+    if r.state!='completed':raise HTTPException(409,'结果尚未完成')
+    return csv_response(r.result,'privacy-'+str(id)+'.csv')

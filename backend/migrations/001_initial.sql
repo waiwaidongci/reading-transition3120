@@ -1,3 +1,7 @@
 -- SQLAlchemy metadata initializes tables idempotently.
 -- Domain tables: reading_collections, reading_sessions, transition_runs, editorial_plans.
--- Unique natural keys: source.key; (record.source_id, record.reference).
+-- Privacy tables: privacy_studies, privacy_ledger, privacy_account.
+-- Unique natural keys: source.key; (record.source_id, record.reference);
+-- privacy_studies.cache_key; privacy_ledger.cache_key / study_id.
+-- Existing deployments are upgraded in app lifespan (editorial_plans gains
+-- nullable run_id and privacy_id); fresh databases are created by metadata.

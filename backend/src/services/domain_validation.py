@@ -23,6 +23,23 @@ def validate_record(values):
     if kind=='forest' and (not 0<out['moisture']<=100 or min(out['thickness'],out['temperature'],out['airflow'],out['minutes'])<=0):raise ValueError('湿度需在(0,100]，其余工艺量为正')
     if kind=='neighbors' and not 1<=out['rating']<=5:raise ValueError('评分需在1–5之间')
     return out
+def validate_privacy_parameters(params):
+    defaults=CONFIG['privacy']['default_parameters'];out={}
+    if set(params)-set(defaults):raise ValueError('包含不支持的隐私研究参数')
+    for k,v in defaults.items():
+        try:n=float(params.get(k,v))
+        except (TypeError,ValueError):raise ValueError('参数必须为有限数值：'+k)
+        if not math.isfinite(n):raise ValueError('参数必须为有限数值：'+k)
+        out[k]=n
+    lo,hi=CONFIG['privacy']['epsilon_range']
+    if not lo<=out['epsilon']<=hi:raise ValueError(f'epsilon需在{lo}至{hi}之间')
+    out['epsilon']=round(out['epsilon'],4)
+    for k,hi in (('min_count',1000),('top_n',100)):
+        n=out[k]
+        if not 1<=n<=hi:raise ValueError(f'{k}需在1至{hi}之间')
+        if n!=int(n):raise ValueError(k+'必须为整数')
+        out[k]=int(n)
+    return out
 def validate_parameters(params):
     defaults=CONFIG['default_parameters'];out={}
     if set(params)-set(defaults):raise ValueError('包含不支持的分析参数')
